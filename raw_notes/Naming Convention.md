@@ -1,0 +1,41 @@
+Glossary
+
+**Chitt** — The canonical name for a token that verifies one party is trusted by another. Each Chitt is attached to a keypair (used to sign things) and a mutable pointer (used to identify and update the Chitt). A Chitt also carries a Nym address for receiving messages. The plural is Chitts.
+
+**Sub-Chitt** — A device-level keypair registered under a master Chitt. Sub-Chitts are used for all routine signing operations (messages, authentication challenges, room entry) so that the master Chitt's private key can remain cold. A holder may have multiple active sub-Chitts across devices. Revoking a sub-Chitt (e.g. on a lost device) does not affect the master Chitt or other sub-Chitts.
+
+**Keyring** — An append-only encrypted blob stored on IPFS that contains a holder's private keys (master Chitt key and sub-Chitt keys). The keyring is decryptable only with a key derived from a passkey combined with a service secret, or via a YubiKey-wrapped decryption key for recovery. Whoever holds the keyring decryption key controls the Chitts in that keyring.
+
+**Chitt Press** — A gated enclave service that generates new Chitts according to a signed policy and distributes them to recipients. Think of a Chitt as a small piece of metal and the Chitt Press as the machine that stamps out new ones — it can only produce what the die (policy) specifies, and the die itself must be approved before the press will accept it.
+
+**Mutable Pointer** — The stable, issuer-controlled identifier for a Chitt. Unlike a CID (which is a hash of a fixed document and changes with every update), the mutable pointer persists across all updates, annotations, and revocations. It is the identifier passed around, embedded in messages, and used as the account ID in authentication. The pointer resolves to the Chitt's current append-only log.
+
+**Append-Only Log** — The authoritative record associated with a Chitt's mutable pointer. The issuer publishes new entries to this log to annotate, update, or revoke the Chitt. Each entry is signed and carries a monotonic version number; log roots are anchored on-chain for rollback resistance and trusted timestamps. The log is what verifiers read to determine a Chitt's current status.
+
+**Version CID** — The content-addressed identifier for a specific version of a Chitt document. Because IPFS is immutable, every update produces a new CID. Version CIDs are recorded in the append-only log so that historical states of a Chitt remain fetchable and verifiable, even as the mutable pointer advances.
+
+**Log Root** — A signed Merkle root over all entries in a Chitt's append-only log at a given moment. Log roots are anchored on-chain, providing a trusted timestamp and rollback resistance. Signatures on messages commit to the log root at signing time, enabling retroactive key-compromise revocation.
+
+**Policy** — A structured, signed document that specifies exactly how a Chitt Press will operate: who is authorized to invoke it, what evidence is required, what the output Chitt will contain, how the issuance log is managed, and what revocation cascading rules apply. A policy must be approved (signed) by an authorizing Chitt before the Press will accept it. The policy's CID is its stable identity across enclave deployments.
+
+**Template Chitt** — A Chitt issued by an authorizer that binds their signing authority to a specific policy and enclave deployment. It is the runtime trust anchor: any Chitt produced by the enclave chains to the template Chitt, which chains to the authorizer. Verifiers walking the chain can confirm not just that the authorizer approved a template, but that they approved this specific policy running on this specific attested code.
+
+**Chain Walk** — The verification process of tracing a Chitt's trust lineage. A chain walk checks the policy used to press the Chitt, the Chitt(s) that signed that policy (the template Chitt and the authorizer's Chitt), and the revocation status of each link. The primary interest is confirming that the policy is valid and properly authorized; the authorizing party's identity is visible but is a secondary concern. Chain walks can be parallelized using the cached chain array embedded in each Chitt's metadata.
+
+**Enclave** — A hardware-isolated, remotely attestable execution environment (e.g. AWS Nitro Enclave) in which a Chitt Press runs. The enclave generates its own keypair internally; the private key never leaves the enclave. An attestation document proves to verifiers that a specific, audited binary is running and that a specific policy was loaded. Enclaves are operated as a service and can accept arbitrary approved policies.
+
+**Issuance Log** — The enclave's internal append-only record of every Chitt it has issued under a given policy. Used for replay protection, rate limiting, and audit. Log roots are anchored on-chain. Log entries are encrypted to the audit-authority Chitt so that only authorized parties can read the full issuance history.
+
+**Signed Chitt Inclusion Proof (SCIP)** — A small signed object produced by the enclave that binds a Chitt's CID to its position in the issuance log and the log root at the time of inclusion. The SCIP is delivered to the recipient and the issuer at issuance time, and becomes part of the Chitt's metadata. It enables any verifier to confirm the Chitt was legitimately issued without replaying the entire log.
+
+**Issuer Annotation** — An update published by the issuer to a Chitt's append-only log that appends information without revoking the Chitt. The Chitt's status remains active. Issuer annotations are governed by the same policy that created the Chitt, or by a separate annotation policy if one is specified.
+
+**Third-Party Annotation** — A signed statement about a Chitt published by a party outside the Chitt's issuance chain, stored on IPFS and indexed via EAS (Ethereum Attestation Service). Third-party annotations are a distinct system from issuer annotations: they are not controlled by the issuer, they are not part of the append-only log, and they are filtered at verification time based on the verifier's trusted annotator roots. Safety annotators and restorative process facilitators operate through the third-party annotation system.
+
+**Annotation Policy** — A signed document (analogous to an issuance policy) that governs who is permitted to annotate a Chitt and in what ways. For example, an annotation policy might allow certain Chitt types to append metadata but not to revoke, or might require corroboration from multiple annotators before a warning is surfaced. If a Chitt type does not specify an annotation policy, a default permissionless model applies (any Chitt holder may publish a third-party annotation, subject to verifier-side filtering).
+
+**Nym Gateway** — The Chitt's inbound messaging address, embedded in its metadata. Messages are routed through the Nym mixnet to this gateway, which hides the sender's identity and timing. The gateway is a field in the Chitt's metadata; holders who operate their own message server can set it to their own endpoint.
+
+**Chitt Image** — An optional IPFS-hosted image associated with a Chitt, referenced by CID in the Chitt's metadata document. The image is intended for display in a hexagonal frame as the visual representation of the Chitt. If a policy includes an image CID field, the issuer supplies the CID at issuance time as part of the proposed Chitt JSON, and it is committed to by the enclave's signature along with all other issuer-populated fields. A Chitt with no image CID displays a default or blank hexagonal tile.
+
+**Invitation Link** — The mechanism for first-Chitt issuance in an invite-only ecosystem. An invitation link contains a signed Chitt JSON (with a placeholder where the recipient's public key will go) and directs the recipient to create a new keyring and sub-Chitt in order to accept it. The recipient supplies their public key and countersignature, completing the Chitt. No prior Chitt is required to receive an invitation.
