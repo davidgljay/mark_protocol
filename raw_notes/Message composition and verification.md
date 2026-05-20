@@ -1,4 +1,8 @@
 Message Lifecycle: Creation, Signing, Verification, and Editing
+
+> **⚠ SUPERSEDED in part — Historical reference only for substrate references.**
+> The envelope structure, signing flow, and verification stages in this document are substantively correct. However, substrate references are outdated: "Solana address" → **Arbitrum One registry address**; "Ed25519 public key" → **ML-DSA-44 public key**. Canonical decisions are in `specs/ARCHITECTURE.md` and `specs/chitt_protocol_spec.md` (v0.3, 2026-05-19).
+
 Envelope Structure
 Every message in the system shares a common envelope shape:
 
@@ -13,13 +17,13 @@ Every message in the system shares a common envelope shape:
   },
   "signatures": [
     {
-      "signer_chitt": "<Solana address of sub-Chitt A>",
-      "public_key": "<signer's Ed25519 public key>",
+      "signer_chitt": "<Arbitrum One registry address of sub-Chitt A>",
+      "public_key": "<signer's ML-DSA-44 public key>",
       "signature": "..."
     },
     {
-      "signer_chitt": "<Solana address of sub-Chitt B>",
-      "public_key": "<signer's Ed25519 public key>",
+      "signer_chitt": "<Arbitrum One registry address of sub-Chitt B>",
+      "public_key": "<signer's ML-DSA-44 public key>",
       "signature": "..."
     }
   ]
@@ -38,7 +42,7 @@ edit_of or retracts — if this is an edit or retraction of a prior message, the
 
 The client then signs the canonically serialized payload using the device's sub-Chitt private key. Master Chitt keys remain in the encrypted keyring and are not used for routine message signing — this is the two-tier model that lets the master key stay cold while devices sign day-to-day.
 
-Each entry in the signatures array contains three fields: the signature over the canonical payload, the signer's Ed25519 public key, and the signer's Solana address — the on-chain account that points to the current head CID of the sub-Chitt's iteration history. Including the public key inline lets a verifier check the signature immediately without a Solana lookup; the Solana address is retained so the verifier can confirm the key is current (i.e., the sub-Chitt hasn't been rotated or deregistered) by resolving the on-chain pointer when freshness matters.
+Each entry in the signatures array contains three fields: the signature over the canonical payload, the signer's ML-DSA-44 public key, and the signer's Arbitrum One registry address — the on-chain entry that points to the current head CID of the sub-Chitt's iteration history. Including the public key inline lets a verifier check the signature immediately without an on-chain lookup; the registry address is retained so the verifier can confirm the key is current (i.e., the sub-Chitt hasn't been rotated or deregistered) by resolving the on-chain pointer when freshness matters.
 
 For parallel co-signing (a single user signing with multiple Chitts representing multiple parts of their reputation, or multiple users co-authoring a statement), each signer produces an independent signature over the same canonical payload. All signatures appear in the signatures array. A consumer verifies each signature independently.
 

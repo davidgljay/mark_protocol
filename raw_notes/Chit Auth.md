@@ -1,4 +1,8 @@
 Chitt Authentication: Detailed Overview
+
+> **⚠ SUPERSEDED — Historical reference only.**
+> This document was written when the registry substrate was Solana. The canonical decisions are in `specs/ARCHITECTURE.md` and `specs/chitt_protocol_spec.md` (v0.3, 2026-05-19). Key changes: "Solana address" → **Arbitrum One registry address**; signatures use **ML-DSA-44** (not Ed25519).
+
 Concept
 Chitt authentication lets a service gate access by requiring proof that a user holds a Chitt matching a specified policy. The user's keyring presents the Chitt, signs a challenge using a sub-Chitt key, and the service verifies both the signature and the Chitt's chain. The Chitt's mutable pointer becomes the durable account identifier; the Chitt's Nym gateway becomes the channel for server-to-user communication.
 
@@ -71,8 +75,8 @@ json   {
      "payload": { ... auth_response ... },
      "signatures": [
        {
-         "signer_chitt": "<Solana address of student's active sub-Chitt>",
-         "public_key": "<signer's Ed25519 public key>",
+         "signer_chitt": "<Arbitrum One registry address of student's active sub-Chitt>",
+         "public_key": "<signer's ML-DSA-44 public key>",
          "signature": "<sig>"
        }
      ]
@@ -84,7 +88,7 @@ Server Verification
 The server receives the response at its callback endpoint and runs the following verification stages:
 
 Challenge freshness. Look up the session by session_id. Confirm the challenge in the response matches the challenge the server issued for that session, that the request hasn't expired, and that this challenge hasn't already been consumed. Replay protection lives here.
-Signature validity. Take the public key from the signature entry and verify the signature against the canonical serialization of the response payload. This check requires no network call. Resolve the signer sub-Chitt's Solana address only if freshness of the key needs to be confirmed (e.g., checking that the sub-Chitt hasn't been rotated since the key was embedded).
+Signature validity. Take the public key from the signature entry and verify the signature against the canonical serialization of the response payload. This check requires no network call. Resolve the signer sub-Chitt's Arbitrum One registry address only if freshness of the key needs to be confirmed (e.g., checking that the sub-Chitt hasn't been rotated since the key was embedded).
 Sub-Chitt to master link. Resolve the presented_chitt's mutable pointer to get the master Chitt's current metadata. Confirm the signing sub-Chitt's pointer appears in the master Chitt's active sub-Chitt list, and verify the master Chitt's signature on that sub-Chitt registration. A sub-Chitt that has been deregistered (lost device, key rotation) cannot authenticate even if its private key is intact.
 Master Chitt chain walk. Walk the master Chitt's issuance chain link by link via mutable pointers. At each link: fetch the metadata, verify the issuer's signature, check that scope at this link doesn't exceed the issuer's scope, check the append-only log for revocations, and continue upward. Walk continues until reaching a Chitt named by the policy as a trusted root, or reject.
 Policy match. Evaluate the policy's match predicate against the presented chain. Does this Chitt derive from the required template? Does its scope satisfy any constraints? If any predicate fails, reject.

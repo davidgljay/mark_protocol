@@ -1,3 +1,11 @@
+> **⚠ SUPERSEDED — Historical reference only.**
+> This document was written when the registry substrate was Solana. The canonical decisions are now in `specs/ARCHITECTURE.md` (v1.0, 2026-05-19). Key changes:
+> - Registry: **Arbitrum One** (not Solana). Contract uses Stylus for on-chain ML-DSA-44 verification.
+> - Signatures: **ML-DSA-44** (not Ed25519). Public keys are 1,312 bytes; signatures are 2,420 bytes.
+> - "PDA" → **registry address**. "SOL" → **ETH**. "Solana program" → **Arbitrum One registry contract**.
+> - Annotation layer: **EAS on Arbitrum One** (not referenced here).
+> - OrbitDB: **not used**. Append-only log is a linked-CID-chain anchored on Arbitrum One.
+
 Chitt Protocol Architecture
 Core Primitive: The Chitt
 A Chitt is a cryptographic keypair plus a metadata document, identified by a mutable pointer. The mutable pointer — not the content hash — is the Chitt's stable identity. It is what gets passed around, embedded in messages, and used as an account identifier. The pointer resolves to the Chitt's current append-only log, which records the full history of updates, annotations, and revocations.
@@ -16,7 +24,7 @@ An optional image CID pointing to a visual representation of the Chitt stored on
 The metadata document is itself signed by the issuer, creating a verifiable chain from any Chitt back to a root of trust.
 
 Component 1: Chitt Registry (IPFS + On-Chain Pointer Registry)
-What it is: Two layers working together. IPFS provides content-addressed storage for Chitt metadata documents (version CIDs). A Solana program maps each Chitt's mutable pointer to the current version CID and maintains the append-only update log. Each Chitt is a Program Derived Account (PDA) under a single deployed program — one contract manages all Chitts, with PDA seeds separating them.
+What it is: Two layers working together. IPFS provides content-addressed storage for Chitt metadata documents (version CIDs). ~~A Solana program maps each Chitt's mutable pointer~~ **An Arbitrum One registry contract maps each Chitt's mutable pointer** to the current version CID and maintains the append-only update log. ~~Each Chitt is a Program Derived Account (PDA) under a single deployed program~~ **Each Chitt has a registry address under a single deployed contract** — one contract manages all Chitts.
 Core functions:
 
 Store Chitt metadata documents on IPFS, returning a version CID
@@ -24,7 +32,7 @@ Resolve a mutable pointer to the current version CID (~400ms slot time, triviall
 Maintain the append-only log of all versions, with each log root anchored on-chain for rollback resistance and trusted timestamps
 Store third-party annotation documents on IPFS, indexed via EAS
 
-Key properties: The mutable pointer is stable across all updates. The version CID is what signatures commit to — it changes with every update, which is fine, because historical signatures reference the version CID they were made against. Updates cost ~$0.00025 per operation on Solana. One deployed program handles all Chitts; account rent (~0.002 SOL) is paid once per Chitt at creation.
+Key properties: The mutable pointer is stable across all updates. The version CID is what signatures commit to — it changes with every update, which is fine, because historical signatures reference the version CID they were made against. ~~Updates cost ~$0.00025 per operation on Solana. One deployed program handles all Chitts; account rent (~0.002 SOL) is paid once per Chitt at creation.~~ **Updates cost an estimated <$0.25 per operation on Arbitrum One (including ML-DSA-44 calldata). One deployed contract handles all Chitts.**
 
 Component 2: Keyring and Device Keys
 What it is: Two-tier key management. The holder's master Chitt private key lives in an encrypted keyring stored on IPFS. Sub-Chitt keys for day-to-day operations live in secure device storage.
@@ -92,7 +100,7 @@ Log each issuance in an append-only issuance log, encrypted with the policy auth
 Privacy properties of the press:
 
 The press never holds plaintext CIDs. The client encrypts the CID before handoff; the press posts ciphertext and never has the decryption key.
-The press never knows the Chitt's address derivation secret. The client derives the PDA address locally and tells the press where to write. The press signs and submits the transaction without knowing why that address was chosen.
+The press never knows the Chitt's address derivation secret. The client derives the registry address locally and tells the press where to write. The press signs and submits the transaction without knowing why that address was chosen.
 The press does record the CID in its issuance log — it necessarily knows the CID since it performed the IPFS upload and chain write. This record is encrypted with the policy authorizer's audit key, making the log readable only to the authorizer. This provides a recovery path: if a recipient loses their capability bundle, the authorizer can retrieve the CID from the press log and reissue the bundle.
 
 Examples:
@@ -151,14 +159,14 @@ Two append-only logs exist in the system with different privacy requirements:
 
 Chitt addresses and content are private by default. Privacy is a client-side choice; the contract is neutral. A Chitt can be made public simply by using a pubkey-derived address and storing the CID in plaintext — discoverable by anyone who knows the owner's public key. The privacy spectrum is:
 
-Public: pubkey-derived PDA address, plaintext CID on-chain. Discoverable and readable by anyone.
-Selectively shared: secret-derived PDA address, encrypted CID on-chain. Owner hands capability bundles to specific recipients.
+Public: pubkey-derived registry address, plaintext CID on-chain. Discoverable and readable by anyone.
+Selectively shared: secret-derived registry address, encrypted CID on-chain. Owner hands capability bundles to specific recipients.
 Fully private: secret-derived address, encrypted CID, encrypted IPFS content. Content unreadable even to someone who obtains the CID.
 
-Secret-derived addresses: rather than using a public key as the PDA seed, the client derives the seed from hash(sign(private_key, "chitt-log-v1")). The resulting account address is opaque — not linkable to any identity without the private key. The Ed25519 signature is deterministic, so the address is always recoverable from the same key.
+Secret-derived addresses: rather than using a public key as the registry address seed, the client derives it from hash(sign(private_key, "chitt-log-v1")). The resulting account address is opaque — not linkable to any identity without the private key. ~~The Ed25519 signature is deterministic~~ **The ML-DSA-44 signature is deterministic**, so the address is always recoverable from the same key.
 
 Two keys per private Chitt:
-- Address secret — derives the PDA. Controls who can find the account. Never shared.
+- Address secret — derives the registry address. Controls who can find the account. Never shared.
 - Decryption key — decrypts the on-chain CID. Grants read access. Can be shared independently.
 
 Capability bundle: to share a private Chitt, the owner provides the recipient with an (address, decryption_key) pair. The key can be encrypted via ECDH to the recipient's public key, tying it to their identity and preventing trivial forwarding.

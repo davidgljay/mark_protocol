@@ -406,7 +406,7 @@ This walk is independent of the standard chain walk used for chitt issuance. It 
 
 ### Open Questions
 
-- **[Engineering]** What is the canonical serialization format for the policy JSON before signing — RFC 8785 canonical JSON or CBOR?
+- **[Engineering — RESOLVED]** Canonical serialization format: canonical CBOR per RFC 8949 §4.2, JSON input surface per RFC 8949 §6.1, with protocol-specific overrides for binary fields (base64url → CBOR byte string) and timestamps (ISO 8601 → CBOR Tag 1 uint). See Appendix A and ARCHITECTURE.md ADR-010.
 - **[Engineering]** How are field definition changes (adding a new field to an existing policy) handled for chitts already issued under the old schema? Are those chitts now non-conforming, or do they remain valid?
 
 ---
@@ -811,7 +811,7 @@ Chitt holders need to sign arbitrary messages using their chitt identity. Signat
 
 **Signing process.**
 1. The sender assembles the payload: content, recipient mutable pointers, timestamp, and optional reply/edit/retraction fields.
-2. The client canonically serializes the payload (RFC 8785 canonical JSON).
+2. The client canonically serializes the payload (canonical CBOR per RFC 8949 §4.2, with protocol-specific overrides for binary fields and timestamps — see Appendix A).
 3. The client signs the canonical serialization using the current device's sub-chitt private key. The master key is not accessed.
 4. The signature, sub-chitt registry address, and ML-DSA-44 public key are added to the `signatures` array.
 5. For parallel co-signing, each additional signer independently repeats steps 3–4 and appends their entry.
@@ -996,8 +996,82 @@ ChittAuth.deliverResponse(request, signedResponse)
 
 ## Timeline Considerations
 
-- **Canonical serialization format** (RFC 8785 canonical JSON vs. CBOR) must be standardized before the npm package API is locked — it affects all signature interoperability.
+- **Canonical serialization format** is resolved: canonical CBOR per RFC 8949 §4.2 with a JSON input surface on the npm package. See Appendix A for the full type mapping. This must be implemented in the npm package and validated against the conformance test corpus before the API is locked.
 - **Arbitrum One registry contract** must implement ML-DSA-44 signature verification via Stylus, performed in full on-chain. The hash-commitment shortcut pattern (store only a hash of the press public key, verify signature off-chain) is explicitly rejected: it degrades the contract from a write gatekeeper to a passive log, enabling spam writes from anyone who knows a valid press public key. Full on-chain verification is required before contract deployment.
 - **Trusted root configuration UX** is a dependency for client-side verification and keychain setup — design work should begin in parallel with protocol engineering.
 - TEE hardening is explicitly P2 and does not gate v1 work.
 - The Arbitrum One substrate is resolved. Gas cost estimates should be finalized against current Arbitrum One blob-era pricing; ML-DSA-44 signature calldata (~2,420 bytes per registry write vs. 64 bytes for Ed25519) will increase per-write cost by an estimated 3–8x, expected to remain under $0.25 per write.
+
+---
+
+## Appendix A — Canonical Serialization (Normative)
+
+All payloads that are signed or hashed in this protocol MUST use canonical CBOR as defined in this appendix. This applies to: chitt offers, completed chitts, log entries (field updates and revocations), message envelope payloads, and authentication request/response objects.
+
+### A.1 Base Standard
+
+**RFC 8949 §6.1** ("Converting from JSON to CBOR") defines the base conversion. **RFC 8949 §4.2** ("Deterministic Encoding Requirements") defines the canonical form. Implementations MUST satisfy both.
+
+The deterministic encoding rules (§4.2) require:
+- Integers encoded in the shortest form (e.g., value 1 → `0x01`, not `0x1800 01`).
+- Floats encoded in the shortest IEEE 754 form that round-trips. Whole-number values that fit in an integer MUST be encoded as integers, not floats (`1` not `1.0`).
+- Map keys sorted by the byte length of their CBOR-encoded form first; for equal lengths, sorted lexicographically by the CBOR-encoded key bytes. This sort applies at every nesting level.
+- No indefinite-length encodings.
+
+### A.2 Protocol-Specific Overrides
+
+Two field categories require schema-aware handling that generic RFC 8949 §6.1 cannot provide. These overrides are applied by the npm package before RFC 8949 §6.1 encoding.
+
+#### A.2.1 Binary Fields
+
+Fields carrying cryptographic material are accepted as **base64url strings** (RFC 4648 §5, no padding) in the JSON input surface and MUST be encoded as **CBOR byte strings (major type 2)**.
+
+| Field name | Logical type | JSON input form | CBOR encoding |
+|---|---|---|---|
+| `public_key` | ML-DSA-44 public key | base64url string | Major type 2 byte string |
+| `offer_signature`, `holder_signature`, `signature` | ML-DSA-44 signature | base64url string | Major type 2 byte string |
+| `policy_id` | CID | base64url string | Major type 2 byte string |
+| `press_chitt`, `signer_chitt` | Mutable registry pointer | base64url string | Major type 2 byte string |
+| `prev_log_root` | CID | base64url string | Major type 2 byte string |
+| Any field of type `cid` or `chitt-pointer` | CID / pointer | base64url string | Major type 2 byte string |
+| `in_reply_to`, `edit_of`, `retracts` | Payload hash | base64url string | Major type 2 byte string |
+
+#### A.2.2 Timestamp Fields
+
+Fields of type `timestamp` are accepted as ISO 8601 strings in the JSON input surface and MUST be encoded as **CBOR Tag 1** (Epoch-Based Date/Time, RFC 8949 §3.4.2) wrapping an **unsigned integer** (Unix epoch seconds, UTC). Sub-second precision is not used.
+
+| Field name | JSON input form | CBOR encoding |
+|---|---|---|
+| `issued_at` | `"2026-05-19T14:30:00Z"` | Tag 1 + uint (e.g., `0xc1 0x1a ...`) |
+| `effective_date` | ISO 8601 string | Tag 1 + uint |
+| `expires`, `valid_until` | ISO 8601 string | Tag 1 + uint |
+| Any field of type `timestamp` | ISO 8601 string | Tag 1 + uint |
+
+Fields of type `date` (e.g., `enrollment_date`) are **not** Tag 1. They remain **CBOR text strings** in `YYYY-MM-DD` format.
+
+#### A.2.3 Optional Field Omission
+
+Optional fields that are absent MUST be omitted from the CBOR map entirely. A field present with a `null` or `undefined` value MUST be stripped before encoding. Encoding `null` produces different bytes than omission and would invalidate signatures across implementations.
+
+### A.3 Type Mapping Summary
+
+| Protocol field type | JSON input form | CBOR encoding |
+|---|---|---|
+| `text` | String | Major type 3 text string (UTF-8, no NFC normalization required) |
+| `integer` | Number (whole) | Major type 0 (unsigned) or 1 (negative), shortest form |
+| `number` | Number | Major type 7 float, shortest round-trippable form |
+| `boolean` | `true` / `false` | Simple value `0xf5` / `0xf4` |
+| `date` | `"YYYY-MM-DD"` string | Major type 3 text string |
+| `timestamp` | ISO 8601 string | Tag 1 + major type 0 uint (Unix epoch seconds) |
+| `cid` | base64url string | Major type 2 byte string |
+| `chitt-pointer` | base64url string | Major type 2 byte string |
+| `chitt-pointer-array` | Array of base64url strings | Major type 4 array of major type 2 byte strings |
+| `append-only-array` | Array | Major type 4 array, items encoded per their own type |
+| Binary cryptographic field | base64url string | Major type 2 byte string |
+| Absent optional field | `null` / omitted | Omitted from map entirely |
+
+### A.4 Conformance Test Corpus
+
+The file `specs/serialization-conformance.json` contains reference test cases. Each case specifies a JSON input object, the names of any binary or timestamp fields requiring protocol-specific overrides, and the expected canonical CBOR output as a lowercase hex string. Implementations MUST produce identical hex output for all cases before being considered conformant.
+
+The corpus covers: binary field encoding, Tag 1 timestamp encoding, `date` text field encoding, integer shortest-form encoding, map key ordering (same-length and different-length keys, nested maps), optional field omission, boolean encoding, Unicode text fields, and array fields.

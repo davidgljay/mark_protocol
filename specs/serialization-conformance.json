@@ -1,0 +1,292 @@
+{
+  "version": "1.0",
+  "generated": "2026-05-20T02:18:37.435Z",
+  "cases": [
+    {
+      "id": "TC-01",
+      "description": "Single text field — basic RFC 8949 §6.1 text string encoding",
+      "input": {
+        "content": "hello"
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a167636f6e74656e746568656c6c6f"
+    },
+    {
+      "id": "TC-02",
+      "description": "Integer field — value 1 encodes as single byte 0x01 (shortest form)",
+      "input": {
+        "version": 1
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a16776657273696f6e01"
+    },
+    {
+      "id": "TC-03",
+      "description": "Integer field — value 23: last value that encodes without additional info byte (0x17)",
+      "input": {
+        "version": 23
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a16776657273696f6e17"
+    },
+    {
+      "id": "TC-04",
+      "description": "Integer field — value 24: first value requiring additional 1-byte info (0x18 0x18)",
+      "input": {
+        "version": 24
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a16776657273696f6e1818"
+    },
+    {
+      "id": "TC-05",
+      "description": "Integer field — value 256: first value requiring 2-byte additional info (0x19 0x01 0x00)",
+      "input": {
+        "count": 256
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a165636f756e74190100"
+    },
+    {
+      "id": "TC-06",
+      "description": "Negative integer — value -1 encodes as CBOR major type 1 (0x20)",
+      "input": {
+        "offset": -1
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a1666f666673657420"
+    },
+    {
+      "id": "TC-07",
+      "description": "Boolean fields — true encodes as 0xf5, false as 0xf4",
+      "input": {
+        "active": true,
+        "archived": false
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a266616374697665f5686172636869766564f4"
+    },
+    {
+      "id": "TC-08",
+      "description": "Timestamp field — ISO 8601 string converts to CBOR Tag 1 (0xc1) + uint (Unix epoch seconds)",
+      "input": {
+        "issued_at": "2026-05-19T00:00:00Z"
+      },
+      "binary_fields": [],
+      "timestamp_fields": [
+        "issued_at"
+      ],
+      "expected_cbor_hex": "a1696973737565645f6174c11a6a0ba800",
+      "notes": "2026-05-19T00:00:00Z = Unix epoch 1779148800 = 0x6a0ba800"
+    },
+    {
+      "id": "TC-09",
+      "description": "Timestamp field — non-zero time, verifies seconds are floored (not rounded)",
+      "input": {
+        "effective_date": "2026-01-01T12:30:45Z"
+      },
+      "binary_fields": [],
+      "timestamp_fields": [
+        "effective_date"
+      ],
+      "expected_cbor_hex": "a16e6566666563746976655f64617465c11a695668f5",
+      "notes": "2026-01-01T12:30:45Z = Unix epoch 1767268245"
+    },
+    {
+      "id": "TC-10",
+      "description": "Date field — YYYY-MM-DD string stays as CBOR text string; no Tag 1 applied",
+      "input": {
+        "enrollment_date": "2026-09-01"
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a16f656e726f6c6c6d656e745f646174656a323032362d30392d3031",
+      "notes": "date fields are never Tag 1; only timestamp fields are"
+    },
+    {
+      "id": "TC-11",
+      "description": "Binary field — base64url string \"AAEC\" (bytes 0x00 0x01 0x02) encodes as CBOR byte string (major type 2)",
+      "input": {
+        "public_key": "AAEC"
+      },
+      "binary_fields": [
+        "public_key"
+      ],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a16a7075626c69635f6b657943000102",
+      "notes": "base64url \"AAEC\" = bytes [0x00, 0x01, 0x02]; CBOR: 0x43 00 01 02"
+    },
+    {
+      "id": "TC-12",
+      "description": "Binary field — 8-byte value verifies byte string length prefix encoding",
+      "input": {
+        "prev_log_root": "AAECAwQFBgc"
+      },
+      "binary_fields": [
+        "prev_log_root"
+      ],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a16d707265765f6c6f675f726f6f74480001020304050607",
+      "notes": "base64url \"AAECAwQFBgc\" = bytes [0x00..0x07]"
+    },
+    {
+      "id": "TC-13",
+      "description": "Map key ordering — same-length keys sort lexicographically by CBOR key bytes; \"a\" < \"b\" < \"c\"",
+      "input": {
+        "c": 3,
+        "a": 1,
+        "b": 2
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a3616101616202616303",
+      "notes": "RFC 8949 §4.2.1: keys sorted by encoded length first, then lexicographic; all length-1 here so: a, b, c"
+    },
+    {
+      "id": "TC-14",
+      "description": "Map key ordering — shorter encoded key comes before longer encoded key regardless of alphabetic order",
+      "input": {
+        "bb": 2,
+        "a": 1
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a261610162626202",
+      "notes": "\"a\" (encoded 2 bytes) sorts before \"bb\" (encoded 3 bytes); \"bb\" is alphabetically after \"a\" but \"a\" is shorter"
+    },
+    {
+      "id": "TC-15",
+      "description": "Nested map — inner map keys are also sorted per §4.2.1",
+      "input": {
+        "outer": {
+          "z": 1,
+          "a": 2
+        }
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a1656f75746572a2616102617a01",
+      "notes": "Inner map must have \"a\" before \"z\""
+    },
+    {
+      "id": "TC-16",
+      "description": "Optional field omission — null value is stripped; resulting map has fewer keys than the JSON input",
+      "input": {
+        "content": "hello",
+        "in_reply_to": null
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a167636f6e74656e746568656c6c6f",
+      "notes": "in_reply_to is null → omitted from CBOR map; result is identical to TC-01"
+    },
+    {
+      "id": "TC-17",
+      "description": "Unicode text field — UTF-8 encoded as-is; no normalization step (unlike RFC 8785)",
+      "input": {
+        "note": "café"
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a1646e6f746565636166c3a9",
+      "notes": "U+00E9 (é) encodes as UTF-8 bytes 0xc3 0xa9; total string \"café\" = 5 UTF-8 bytes"
+    },
+    {
+      "id": "TC-18",
+      "description": "Array field — array of text strings encodes as CBOR major type 4",
+      "input": {
+        "recipients": [
+          "abc",
+          "def"
+        ]
+      },
+      "binary_fields": [],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a16a726563697069656e7473826361626363646566"
+    },
+    {
+      "id": "TC-19",
+      "description": "Array of binary fields — each array element that is a binary field encodes as CBOR byte string",
+      "input": {
+        "approved_presses": [
+          "AAEC",
+          "BAED"
+        ]
+      },
+      "binary_fields": [
+        "approved_presses"
+      ],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a170617070726f7665645f70726573736573824300010243040103",
+      "notes": "Array items inherit the binary field override for their parent key"
+    },
+    {
+      "id": "TC-20",
+      "description": "Full message envelope payload — exercises text, array, timestamp, and binary fields together",
+      "input": {
+        "content": "hello world",
+        "recipients": [
+          "AAEC",
+          "BAED"
+        ],
+        "timestamp": "2026-05-19T00:00:00Z"
+      },
+      "binary_fields": [
+        "recipients"
+      ],
+      "timestamp_fields": [
+        "timestamp"
+      ],
+      "expected_cbor_hex": "a367636f6e74656e746b68656c6c6f20776f726c646974696d657374616d70c11a6a0ba8006a726563697069656e7473824300010243040103",
+      "notes": "recipients are pointers (binary), timestamp is Tag 1; content is plain text"
+    },
+    {
+      "id": "TC-21",
+      "description": "Log entry with version, prev_log_root (binary), and field update",
+      "input": {
+        "version": 2,
+        "entry_type": "field_update",
+        "prev_log_root": "AAEC",
+        "field_updates": [
+          {
+            "field": "role",
+            "value": "admin"
+          }
+        ]
+      },
+      "binary_fields": [
+        "prev_log_root"
+      ],
+      "timestamp_fields": [],
+      "expected_cbor_hex": "a46776657273696f6e026a656e7472795f747970656c6669656c645f7570646174656d6669656c645f7570646174657381a2656669656c6464726f6c656576616c75656561646d696e6d707265765f6c6f675f726f6f7443000102"
+    },
+    {
+      "id": "TC-22",
+      "description": "Revocation entry — code (integer), effective_date (Tag 1 timestamp), note (text)",
+      "input": {
+        "version": 3,
+        "entry_type": "revocation",
+        "prev_log_root": "AAEC",
+        "revocation": {
+          "code": 700,
+          "effective_date": "2026-05-19T00:00:00Z",
+          "note": "Role ended"
+        }
+      },
+      "binary_fields": [
+        "prev_log_root"
+      ],
+      "timestamp_fields": [
+        "effective_date"
+      ],
+      "expected_cbor_hex": "a46776657273696f6e036a656e7472795f747970656a7265766f636174696f6e6a7265766f636174696f6ea364636f64651902bc646e6f74656a526f6c6520656e6465646e6566666563746976655f64617465c11a6a0ba8006d707265765f6c6f675f726f6f7443000102"
+    }
+  ]
+}

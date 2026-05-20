@@ -1,19 +1,22 @@
 Chitt Template Lifecycle: Technical Summary
 
+> **⚠ SUPERSEDED — Historical reference only.**
+> This document was written when the registry substrate was Solana. The canonical decisions are in `specs/ARCHITECTURE.md` (v1.0, 2026-05-19). Key changes: registry is **Arbitrum One** (not Solana); signatures are **ML-DSA-44** (not Ed25519); "PDA" → **registry address**. Inline strikethroughs below mark superseded text.
+
 ## Chitt Address Model
-A Chitt's stable address is a Solana Program Derived Account (PDA) managed by a single deployed Chitt program. That account is a mutable pointer — it always points to the current head CID of an append-only log stored on IPFS. The log itself is immutable and content-addressed; only the Solana pointer moves as new entries are appended or the Chitt is updated. This means a Chitt can be updated or revoked trustlessly (Solana provides authoritative, verifiable state) while its full history remains permanently retrievable from IPFS by walking the log from the head.
+A Chitt's stable address is ~~a Solana Program Derived Account (PDA) managed by a single deployed Chitt program~~ **an entry in the Arbitrum One registry contract**. That account is a mutable pointer — it always points to the current head CID of an append-only log stored on IPFS. The log itself is immutable and content-addressed; only the Solana pointer moves as new entries are appended or the Chitt is updated. This means a Chitt can be updated or revoked trustlessly (Solana provides authoritative, verifiable state) while its full history remains permanently retrievable from IPFS by walking the log from the head.
 
 ### Privacy model for Chitt addresses
 
 Chitt addresses and content are private by default. The privacy posture is determined entirely by client-side choices; the on-chain contract is neutral.
 
-**Address derivation:** By default, the PDA seed is derived from hash(sign(private_key, "chitt-log-v1")) rather than from a public key. The resulting address is opaque — not discoverable or linkable to any identity without the private key. Because Ed25519 signatures are deterministic, the address is always re-derivable from the same key. An owner who wants a fully public Chitt simply uses their public key as the PDA seed instead.
+**Address derivation:** By default, the registry address is derived from hash(sign(private_key, "chitt-log-v1")) rather than from a public key. The resulting address is opaque — not discoverable or linkable to any identity without the private key. Because ~~Ed25519~~ **ML-DSA-44** signatures are deterministic, the address is always re-derivable from the same key. An owner who wants a fully public Chitt simply uses their public key as the address seed instead.
 
 **Two keys per private Chitt:**
-- *Address secret* — derives the PDA. Controls who can find the account. Never shared.
+- *Address secret* — derives the registry address. Controls who can find the account. Never shared.
 - *Decryption key* — decrypts the on-chain CID. Grants read access. Shareable independently.
 
-**On-chain CID storage:** For private Chitts, the CID stored in the Solana account is encrypted with the owner's decryption key. The press posts ciphertext and never holds the decryption key.
+**On-chain CID storage:** For private Chitts, the CID stored in the ~~Arbitrum One registry entry~~ **Arbitrum One registry entry** is encrypted with the owner's decryption key. The press posts ciphertext and never holds the decryption key.
 
 **Capability bundle:** To share a private Chitt, the owner provides a recipient with an (address, decryption_key) pair — the "capability bundle." This can be encrypted via ECDH to the recipient's public key to tie it to their identity. Anyone holding the bundle can verify the Chitt but cannot update or revoke it.
 
@@ -111,7 +114,7 @@ The policy ID and policy hash
 The hoster identifier
 
 
-The signed template Chitt is published to IPFS and its mutable Solana pointer is registered, pointing to the head of the template's IPFS log.
+The signed template Chitt is published to IPFS and its mutable Arbitrum One registry pointer is registered, pointing to the head of the template's IPFS log.
 
 The template Chitt is now the runtime trust anchor: any Chitt issued by the enclave chains to this template Chitt, which chains to the superintendent. Verifiers walking the chain can confirm not just "the superintendent authorized this template" but "the superintendent authorized this specific policy running on this specific attested code in this specific enclave."
 
@@ -121,7 +124,7 @@ Publication makes the relevant pointers and CIDs discoverable to the right audie
 The template Chitt's mutable pointer is distributed to the parties authorized to invoke it — typically via Nym to their recipient Chitts.
 The policy CID and template Chitt pointer can also be listed in a public template directory if discovery beyond the authorized group is desired.
 The hoster exposes an invocation endpoint included in the template Chitt's metadata.
-The hoster begins serving the enclave's first log entry (empty log, signed by the enclave key) at the deterministic IPFS location committed to in the template Chitt. The log's head CID is anchored in the template's Solana account.
+The hoster begins serving the enclave's first log entry (empty log, signed by the enclave key) at the deterministic IPFS location committed to in the template Chitt. The log's head CID is anchored in the template's Arbitrum One registry entry.
 
 5. First-Chitt Issuance via Invitation Link
 For new participants who do not yet hold any Chitt, issuance happens via an invitation link. The Chitt ecosystem is invite-only at this stage.
@@ -134,8 +137,8 @@ The offer is encoded into an invitation link (e.g., as a base64 payload in a URL
 The recipient opens the invitation link. Their client presents a setup flow: create a new keyring, generate a fresh keypair for this Chitt, and store the private key in the keyring.
 The recipient adds their public key to the proposed Chitt JSON and signs the completed document with their new private key.
 The recipient (or their client) posts the completed Chitt blob — containing the enclave's signature on the offer and the recipient's public key plus countersignature — to IPFS. Any party can perform this posting step; it requires no further involvement from the enclave, because the cryptographic content was already finalized when the recipient added their key and signature.
-The Chitt Press registers a mutable Solana account for this Chitt, with its pointer set to the head CID of the Chitt's new IPFS log.
-The completed Chitt's Solana address is now the recipient's stable Chitt identity.
+The Chitt Press registers a mutable Arbitrum One registry entry for this Chitt, with its pointer set to the head CID of the Chitt's new IPFS log.
+The completed Chitt's Arbitrum One registry address is now the recipient's stable Chitt identity.
 
 This flow requires no prior Chitt to receive an invitation. It is the entry point for new participants.
 
@@ -153,7 +156,7 @@ The enclave updates its issuance log:
 
 It constructs a log entry per the policy's log mode. The entry includes the Chitt's CID (which the press necessarily knows, having performed the IPFS upload and chain write), encrypted with the policy authorizer's audit key. Only the authorizer can read the log; no one else — including the press operator — can reconstruct which CIDs were issued under the policy.
 It produces a new log root incorporating the new entry, signs it, and publishes both the entry and the new root to IPFS.
-The Solana account for this Chitt is updated to point to the new log head CID.
+The Arbitrum One registry entry for this Chitt is updated to point to the new log head CID.
 
 Note on key separation: the policy authorizer holds two distinct keys — a policy control key (governs what the press may do) and an audit key (encrypts the issuance log). These must be separate keypairs. A compromised audit key must not grant policy control.
 
@@ -167,6 +170,6 @@ To the issuer (administrator): the Chitt's CID, the SCIP, and an audit record, e
 
 The enclave writes a periodic summary entry destined for the authorizer (superintendent), encrypted such that only the audit-authority Chitt can decrypt.
 
-The Chitt is now live. The recipient holds the private key for the Chitt's keypair in their keyring. The Chitt's full provenance is verifiable by anyone: resolving the Solana address, a verifier reads the current log head CID, walks the append-only IPFS log, fetches the current version, finds the recipient's countersignature, the enclave's signature, the template Chitt (with attestation and policy hash), the superintendent's authorization, and on up to the chain's root of trust.
+The Chitt is now live. The recipient holds the private key for the Chitt's keypair in their keyring. The Chitt's full provenance is verifiable by anyone: resolving the Arbitrum One registry address, a verifier reads the current log head CID, walks the append-only IPFS log, fetches the current version, finds the recipient's countersignature, the enclave's signature, the template Chitt (with attestation and policy hash), the superintendent's authorization, and on up to the chain's root of trust.
 
 Note on enclave involvement in posting: The most sensitive operation is the enclave signing the proposed Chitt JSON. The subsequent steps — recipient adding their key, posting to IPFS, and the enclave logging the inclusion — are comparatively straightforward and do not require the enclave to be uniquely involved. The cryptographic commitments are already established; the posting and logging steps are administrative, and their correctness is verifiable by anyone reading the posted blob.
